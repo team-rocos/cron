@@ -86,7 +86,7 @@ func calculateJitteredTime(now time.Time, jitterMaximum time.Duration) time.Time
 	if jitterMaximum > 0 {
 		val := jitterMaximum.Nanoseconds()
 		if val < math.MinInt64 {
-			val = jitterMaximum.Nanoseconds()+1
+			val = jitterMaximum.Nanoseconds() + 1
 		}
 		result = result.Add(time.Duration(rand.Int63n(val)))
 	}
@@ -308,8 +308,9 @@ func (c *Cron) run() {
 
 		for {
 			select {
-			case now = <-timer.C:
-				now = now.In(c.location)
+			case <-timer.C:
+				// Note: we can't just use the value which comes back from timer.C, because that won't respect the timeCallback, if one is set.
+				now = c.now()
 				c.logger.Info("wake", "now", now)
 
 				// Run every entry whose next time was less than now
