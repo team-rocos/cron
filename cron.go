@@ -283,7 +283,7 @@ func (c *Cron) Run() {
 	c.run()
 }
 
-func (c *Cron) RecalculateTimer() {
+func (c *Cron) RecalculateNextEvent() {
 	c.recalculateTimer <- struct{}{}
 }
 
