@@ -13,20 +13,21 @@ import (
 // specified by the schedule. It may be started, stopped, and the entries may
 // be inspected while running.
 type Cron struct {
-	entries      []*Entry
-	chain        Chain
-	stop         chan struct{}
-	add          chan *Entry
-	remove       chan EntryID
-	snapshot     chan chan []Entry
-	running      bool
-	logger       Logger
-	runningMu    sync.Mutex
-	location     *time.Location
-	parser       Parser
-	nextID       EntryID
-	jobWaiter    sync.WaitGroup
-	timeCallback func() time.Time
+	entries          []*Entry
+	chain            Chain
+	stop             chan struct{}
+	add              chan *Entry
+	remove           chan EntryID
+	snapshot         chan chan []Entry
+	running          bool
+	logger           Logger
+	runningMu        sync.Mutex
+	location         *time.Location
+	parser           Parser
+	nextID           EntryID
+	jobWaiter        sync.WaitGroup
+	timeCallback     func() time.Time
+	recalculateTimer chan struct{}
 }
 
 // Job is an interface for submitted cron jobs.
@@ -131,18 +132,19 @@ func (s byTime) Less(i, j int) bool {
 // See "cron.With*" to modify the default behavior.
 func New(opts ...Option) *Cron {
 	c := &Cron{
-		entries:      nil,
-		chain:        NewChain(),
-		add:          make(chan *Entry),
-		stop:         make(chan struct{}),
-		snapshot:     make(chan chan []Entry),
-		remove:       make(chan EntryID),
-		running:      false,
-		runningMu:    sync.Mutex{},
-		logger:       DefaultLogger,
-		location:     time.Local,
-		parser:       standardParser,
-		timeCallback: nil,
+		entries:          nil,
+		chain:            NewChain(),
+		add:              make(chan *Entry),
+		stop:             make(chan struct{}),
+		snapshot:         make(chan chan []Entry),
+		remove:           make(chan EntryID),
+		running:          false,
+		runningMu:        sync.Mutex{},
+		logger:           DefaultLogger,
+		location:         time.Local,
+		parser:           standardParser,
+		timeCallback:     nil,
+		recalculateTimer: make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -281,6 +283,10 @@ func (c *Cron) Run() {
 	c.run()
 }
 
+func (c *Cron) RecalculateTimer() {
+	c.recalculateTimer <- struct{}{}
+}
+
 // run the scheduler.. this is private just due to the need to synchronize
 // access to the 'running' state variable.
 func (c *Cron) run() {
@@ -345,6 +351,8 @@ func (c *Cron) run() {
 				now = c.now()
 				c.removeEntry(id)
 				c.logger.Info("removed", "entry", id)
+			case <-c.recalculateTimer:
+				break
 			}
 
 			break
