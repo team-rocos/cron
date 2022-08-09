@@ -352,6 +352,7 @@ func (c *Cron) run() {
 				c.removeEntry(id)
 				c.logger.Info("removed", "entry", id)
 			case <-c.recalculateTimer:
+				now = c.now()
 				break
 			}
 
